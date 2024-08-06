@@ -9,7 +9,7 @@
 	url = https://github.com/fmtlib/fmt.git
 [submodule "libs/JUCE"]
 	path = libs/JUCE
-	url = https://github.com/surge-synthesizer/JUCE
+	url = https://github.com/dhatadi/JUCE
 [submodule "libs/luajitlib/LuaJIT"]
 	path = libs/luajitlib/LuaJIT
 	url = https://github.com/LuaJIT/LuaJIT.git
