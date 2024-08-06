@@ -142,6 +142,10 @@ class SurgeSynthesizer:
         """
         Get a Python dictionary with the Surge XT parameters laid out in the logical patch format
         """
+    def getTempo(self) -> float:
+        """
+        Get the current tempo
+        """
     def getSampleRate(self) -> float:
         ...
     def getUserDataPath(self) -> str:
@@ -165,6 +169,10 @@ class SurgeSynthesizer:
     def loadPatch(self, path: str) -> bool:
         """
         Load a Surge XT .fxp patch from the file system.
+        """
+    def setTempo(self, tempo: float) -> None:
+        """
+        Set the tempo by replacing current value
         """
     def loadSCLFile(self, arg0: str) -> None:
         """
