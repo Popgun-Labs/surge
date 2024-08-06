@@ -639,6 +639,9 @@ class SurgeSynthesizerWithPythonExtensions : public SurgeSynthesizer
 
     void savePatchPy(const std::string &s) { savePatchToPath(string_to_path(s)); }
 
+    float getTempo() { return time_data.tempo; }
+    void setTempo(float tempo) { time_data.tempo = tempo; }
+
     std::string factoryDataPath() const { return storage.datapath.u8string(); }
 
     std::string userDataPath() const { return storage.userDataPath.u8string(); }
@@ -1110,6 +1113,11 @@ PYBIND11_MODULE(surgepy, m)
              "Load a Surge XT .fxp patch from the file system.", py::arg("path"))
         .def("savePatch", &SurgeSynthesizerWithPythonExtensions::savePatchPy,
              "Save the current state of Surge XT to an .fxp file.", py::arg("path"))
+
+        .def("getTempo", &SurgeSynthesizerWithPythonExtensions::getTempo,
+             "Get the current tempo.")
+        .def("setTempo", &SurgeSynthesizerWithPythonExtensions::setTempo,
+             "Set the tempo by replacing current value.", py::arg("tempo"))
 
         .def("getModSource", &SurgeSynthesizerWithPythonExtensions::getModSource,
              "Given a constant from surge.constants.ms_*, provide a modulator object",

@@ -41,6 +41,16 @@ def test_render_note_with_input():
     assert not np.all(out_buf == 0.0)
 
 
+def test_tempo_change():
+    """
+    Test tempo changes
+    """
+    s = surgepy.createSurge(44100)
+    assert (s.getTempo == 120.0)
+    s.setTempo(148.0)
+    assert (s.getTempo == 148.0)
+
+
 def test_default_mpeEnabled():
     """
     Test that mpeEnabled flag is False by default.
