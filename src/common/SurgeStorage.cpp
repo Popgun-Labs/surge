@@ -2765,6 +2765,15 @@ void SurgeStorage::rescanUserMidiMappings()
     }
 }
 
+void SurgeStorage::loadMidiMappingFromFile(const fs::path &p)
+{
+    TiXmlDocument doc;
+    if (doc.LoadFile(p.c_str()))
+    {
+        loadMidiMappingFromDoc(doc);
+    }
+}
+
 void SurgeStorage::loadMidiMappingByName(std::string name)
 {
     if (userMidiMappingsXMLByName.find(name) == userMidiMappingsXMLByName.end())
@@ -2774,6 +2783,11 @@ void SurgeStorage::loadMidiMappingByName(std::string name)
     }
 
     auto doc = userMidiMappingsXMLByName[name];
+    loadMidiMappingFromDoc(doc);
+}
+
+void SurgeStorage::loadMidiMappingFromDoc(const TiXmlDocument &doc)
+{
     auto sm = TINYXML_SAFE_TO_ELEMENT(doc.FirstChild("surge-midi"));
 
     // we can do revision stuff here later if we need to
