@@ -976,6 +976,18 @@ class SurgeSynthesizerWithPythonExtensions : public SurgeSynthesizer
         return res;
     }
 
+    void loadMidiMappingFile(const std::string &s)
+    {
+        try
+        {
+            storage.loadMidiMappingFromFile(s);
+        }
+        catch (std::exception &e)
+        {
+            throw std::runtime_error(e.what()); // convert so python sees it
+        }
+    }
+
     void loadSCLFile(const std::string &s)
     {
         try
@@ -1169,6 +1181,8 @@ PYBIND11_MODULE(surgepy, m)
              "Get a Python dictionary with the Surge XT parameters laid out in the logical patch "
              "format")
 
+        .def("loadMidiMappingFile", &SurgeSynthesizerWithPythonExtensions::loadMidiMappingFile,
+             "Load a MIDI Mapping file")
         .def("loadSCLFile", &SurgeSynthesizerWithPythonExtensions::loadSCLFile,
              "Load an SCL tuning file and apply tuning to this instance")
         .def("retuneToStandardTuning",
