@@ -1390,7 +1390,7 @@ void LFOAndStepDisplay::paintStepSeq(juce::Graphics &g)
 
         std::string txt = fmt::format("{:.{}f} %", ss->steps[draggedStep] * 100.f, prec);
 
-        int sw = g.getCurrentFont().getStringWidth(txt);
+        int sw = SST_STRING_WIDTH_INT(g.getCurrentFont(), txt);
 
         auto sr = steprect[draggedStep];
 

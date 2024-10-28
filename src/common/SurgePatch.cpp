@@ -978,14 +978,18 @@ void SurgePatch::init_default_values()
 
 SurgePatch::~SurgePatch() { free(patchptr); }
 
-void SurgePatch::copy_scenedata(pdata *d, int scene)
+void SurgePatch::copy_scenedata(pdata *d, pdata *dUnmod, int scene)
 {
+
     int s = scene_start[scene];
     for (int i = 0; i < n_scene_params; i++)
     {
         // if (param_ptr[i+s]->valtype == vt_float)
         // d[i].f = param_ptr[i+s]->val.f;
         d[i].i = param_ptr[i + s]->val.i;
+
+        if (param_ptr[i + s]->ctrlgroup == cg_OSC)
+            dUnmod[i].f = d[i].f;
     }
 
     for (int i = 0; i < paramModulationCount; ++i)
@@ -1068,7 +1072,7 @@ void SurgePatch::update_controls(
 
             unsigned char mbuf alignas(16)[oscillator_buffer_size];
             Oscillator *t_osc =
-                spawn_osc(sc.osc[osc].type.val.i, storage, &sc.osc[osc], nullptr, mbuf);
+                spawn_osc(sc.osc[osc].type.val.i, storage, &sc.osc[osc], nullptr, nullptr, mbuf);
             if (t_osc)
             {
                 t_osc->init_ctrltypes(sn, osc);
@@ -1512,7 +1516,10 @@ void SurgePatch::load_xml(const void *data, int datasize, bool is_preset)
     }
 
     TiXmlElement *parameters = TINYXML_SAFE_TO_ELEMENT(patch->FirstChild("parameters"));
-    assert(parameters);
+    if (!parameters)
+    {
+        return;
+    }
     int n = param_ptr.size();
 
     // delete volume (below streaming version 17) & fx_bypass if it's a preset
@@ -2875,6 +2882,26 @@ void SurgePatch::load_xml(const void *data, int datasize, bool is_preset)
                             }
                         }
                     }
+
+                    for (int osc = 0; osc < n_oscs; osc++)
+                    {
+                        std::string wsns =
+                            "wtse_state_" + std::to_string(sc) + "_" + std::to_string(osc);
+                        auto wss = TINYXML_SAFE_TO_ELEMENT(p->FirstChild(wsns));
+
+                        if (wss)
+                        {
+                            auto q = &(dawExtraState.editor.wavetableScriptEditState[sc][osc]);
+                            int vv;
+
+                            q->codeOrPrelude = 0;
+
+                            if (wss->QueryIntAttribute("codeOrPrelude", &vv) == TIXML_SUCCESS)
+                            {
+                                q->codeOrPrelude = vv;
+                            }
+                        }
+                    }
                 } // end of scene loop
 
                 {
@@ -3716,6 +3743,17 @@ unsigned int SurgePatch::save_xml(void **data) // allocates mem, must be freed b
                 fss.SetAttribute("debuggerOpen", q->debuggerOpen);
 
                 eds.InsertEndChild(fss);
+            }
+
+            for (int os = 0; os < n_oscs; ++os)
+            {
+                auto q = &(dawExtraState.editor.wavetableScriptEditState[sc][os]);
+                std::string wsns = "wtse_state_" + std::to_string(sc) + "_" + std::to_string(os);
+                TiXmlElement wss(wsns);
+
+                wss.SetAttribute("codeOrPrelude", q->codeOrPrelude);
+
+                eds.InsertEndChild(wss);
             }
 
             TiXmlElement modEd("modulation_editor");

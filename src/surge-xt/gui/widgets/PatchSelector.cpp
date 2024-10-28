@@ -19,22 +19,8 @@
  * All source for Surge XT is available at
  * https://github.com/surge-synthesizer/surge
  */
-#include "PatchSelector.h"
-/*
-** Surge Synthesizer is Free and Open Source Software
-**
-** Surge is made available under the Gnu General Public License, v3.0
-** https://www.gnu.org/licenses/gpl-3.0.en.html
-**
-** Copyright 2004-2021 by various individuals as described by the Git transaction log
-**
-** All source at: https://github.com/surge-synthesizer/surge.git
-**
-** Surge was a commercial product from 2004-2018, with Copyright and ownership
-** in that period held by Claes Johanson at Vember Audio. Claes made Surge
-** open source in September 2018.
-*/
 
+#include "PatchSelector.h"
 #include "PatchSelector.h"
 #include "SurgeStorage.h"
 #include "SurgeGUIUtils.h"
@@ -342,13 +328,13 @@ void PatchSelector::paint(juce::Graphics &g)
     // patch name
     if (!isTypeaheadSearchOn)
     {
-        auto catsz = skin->fontManager->displayFont.getStringWidthFloat(category);
-        auto authsz = skin->fontManager->displayFont.getStringWidthFloat(author);
+        auto catsz = SST_STRING_WIDTH_FLOAT(skin->fontManager->displayFont, category);
+        auto authsz = SST_STRING_WIDTH_FLOAT(skin->fontManager->displayFont, author);
 
         auto catszwith =
-            skin->fontManager->displayFont.getStringWidthFloat("Category: " + category);
-        auto authszwith = skin->fontManager->displayFont.getStringWidthFloat("By: " + author);
-        auto mainsz = skin->fontManager->patchNameFont.getStringWidthFloat(pname);
+            SST_STRING_WIDTH_FLOAT(skin->fontManager->displayFont, "Category: " + category);
+        auto authszwith = SST_STRING_WIDTH_FLOAT(skin->fontManager->displayFont, "By: " + author);
+        auto mainsz = SST_STRING_WIDTH_FLOAT(skin->fontManager->patchNameFont, pname);
 
         bool useCatAndBy{false}, alignTop{false};
 
@@ -1564,7 +1550,7 @@ void PatchSelectorCommentTooltip::positionForComment(const juce::Point<int> &cen
 
     while (std::getline(ss, to, '\n'))
     {
-        auto w = ft.getStringWidthFloat(to);
+        auto w = SST_STRING_WIDTH_FLOAT(ft, to);
 
         // in case of an empty line, we still need to count it as an extra row
         // so bump it up a bit so that the rows calculation ceils to 1

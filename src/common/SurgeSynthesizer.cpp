@@ -87,6 +87,10 @@ SurgeSynthesizer::SurgeSynthesizer(PluginLayer *parent, const std::string &suppl
     // TODO: FIX SCENE ASSUMPTION
     memset(storage.getPatch().scenedata[0], 0, sizeof(pdata) * n_scene_params);
     memset(storage.getPatch().scenedata[1], 0, sizeof(pdata) * n_scene_params);
+
+    memset(storage.getPatch().scenedataOrig[0], 0, sizeof(pdata) * n_scene_params);
+    memset(storage.getPatch().scenedataOrig[1], 0, sizeof(pdata) * n_scene_params);
+
     memset(storage.getPatch().globaldata, 0, sizeof(pdata) * n_global_params);
     memset(mControlInterpolatorUsed, 0, sizeof(bool) * num_controlinterpolators);
 
@@ -833,12 +837,12 @@ void SurgeSynthesizer::playVoice(int scene, char channel, char key, char velocit
                 int mpeMainChannel = getMpeMainChannel(channel, key);
 
                 voices[scene].push_back(nvoice);
-                new (nvoice) SurgeVoice(&storage, &storage.getPatch().scene[scene],
-                                        storage.getPatch().scenedata[scene], key, velocity, channel,
-                                        scene, detune, &channelState[channel].keyState[key],
-                                        &channelState[mpeMainChannel], &channelState[channel],
-                                        mpeEnabled, voiceCounter++, host_noteid,
-                                        host_originating_key, host_originating_channel, 0.f, 0.f);
+                new (nvoice) SurgeVoice(
+                    &storage, &storage.getPatch().scene[scene], storage.getPatch().scenedata[scene],
+                    storage.getPatch().scenedataOrig[scene], key, velocity, channel, scene, detune,
+                    &channelState[channel].keyState[key], &channelState[mpeMainChannel],
+                    &channelState[channel], mpeEnabled, voiceCounter++, host_noteid,
+                    host_originating_key, host_originating_channel, 0.f, 0.f);
             }
         }
         break;
@@ -979,8 +983,9 @@ void SurgeSynthesizer::playVoice(int scene, char channel, char key, char velocit
                         storage.last_key[scene] = key;
                     new (nvoice) SurgeVoice(
                         &storage, &storage.getPatch().scene[scene],
-                        storage.getPatch().scenedata[scene], key, velocity, channel, scene, detune,
-                        &channelState[channel].keyState[key], &channelState[mpeMainChannel],
+                        storage.getPatch().scenedata[scene],
+                        storage.getPatch().scenedataOrig[scene], key, velocity, channel, scene,
+                        detune, &channelState[channel].keyState[key], &channelState[mpeMainChannel],
                         &channelState[channel], mpeEnabled, voiceCounter++, host_noteid,
                         host_originating_key, host_originating_channel, aegReuse, fegReuse);
 
@@ -1123,8 +1128,9 @@ void SurgeSynthesizer::playVoice(int scene, char channel, char key, char velocit
                     voices[scene].push_back(nvoice);
                     new (nvoice) SurgeVoice(
                         &storage, &storage.getPatch().scene[scene],
-                        storage.getPatch().scenedata[scene], key, velocity, channel, scene, detune,
-                        &channelState[channel].keyState[key], &channelState[mpeMainChannel],
+                        storage.getPatch().scenedata[scene],
+                        storage.getPatch().scenedataOrig[scene], key, velocity, channel, scene,
+                        detune, &channelState[channel].keyState[key], &channelState[mpeMainChannel],
                         &channelState[channel], mpeEnabled, voiceCounter++, host_noteid,
                         host_originating_key, host_originating_channel, aegStart, fegStart);
                 }
@@ -1500,7 +1506,7 @@ void SurgeSynthesizer::releaseNotePostHoldCheck(int scene, char channel, char ke
                     else
                     { // MPE branch
                         int highest = -1, lowest = 128, latest = -1;
-                        int hichan, lowchan, latechan;
+                        int hichan{-1}, lowchan{-1}, latechan{-1};
                         int64_t lt = 0;
 
                         for (k = hikey; k >= lowkey && !do_switch; k--)
@@ -1721,7 +1727,7 @@ void SurgeSynthesizer::releaseNotePostHoldCheck(int scene, char channel, char ke
                     else
                     {
                         int highest = -1, lowest = 128, latest = -1;
-                        int hichan, lowchan, latechan;
+                        int hichan{-1}, lowchan{-1}, latechan{-1};
                         int64_t lt = 0;
 
                         for (k = hikey; k >= lowkey && !do_switch; k--)
@@ -2404,7 +2410,7 @@ void SurgeSynthesizer::channelController(char channel, int cc, int value)
                 // Notify audio thread param change listeners (OSC, e.g.)
                 // (which run on juce messenger thread)
                 for (const auto &it : audioThreadParamListeners)
-                    (it.second)(storage.getPatch().param_ptr[i]->oscName, fval);
+                    (it.second)(storage.getPatch().param_ptr[i]->oscName, fval, "");
 
                 int j = 0;
                 while (j < 7)
@@ -3196,50 +3202,64 @@ bool SurgeSynthesizer::loadOscalgos()
         for (int i = 0; i < n_oscs; i++)
         {
             localResendOscParams[s][i] = false;
-            if (storage.getPatch().scene[s].osc[i].queue_type > -1)
+            auto &osc_st = storage.getPatch().scene[s].osc[i];
+            if (osc_st.queue_type > -1)
             {
                 algosChanged = true;
-                // clear assigned modulation if we change osc type, see issue #2224
-                if (storage.getPatch().scene[s].osc[i].queue_type !=
-                    storage.getPatch().scene[s].osc[i].type.val.i)
+                // clear assigned modulation, and echo to OSC if we change osc type, see issue #2224
+                if (osc_st.queue_type != osc_st.type.val.i)
                 {
                     clear_osc_modulation(s, i);
                 }
 
-                storage.getPatch().scene[s].osc[i].type.val.i =
-                    storage.getPatch().scene[s].osc[i].queue_type;
-                storage.getPatch().update_controls(false, &storage.getPatch().scene[s].osc[i]);
-                storage.getPatch().scene[s].osc[i].queue_type = -1;
+                // Notify audio thread param change listeners (OSC, e.g.)
+                // (which run on juce messenger thread)
+                std::stringstream sb;
+                sb << "/param/" << (char)('a' + s) << "/osc/" << i + 1 << "/type";
+                auto new_type = osc_st.queue_type;
+                for (const auto &it : audioThreadParamListeners)
+                    (it.second)(sb.str(), new_type, osc_type_names[new_type]);
+
+                osc_st.type.val.i = osc_st.queue_type;
+                storage.getPatch().update_controls(false, &osc_st);
+                osc_st.queue_type = -1;
                 switch_toggled_queued = true;
                 refresh_editor = true;
                 localResendOscParams[s][i] = true;
             }
 
-            TiXmlElement *e = (TiXmlElement *)storage.getPatch().scene[s].osc[i].queue_xmldata;
+            TiXmlElement *e = (TiXmlElement *)osc_st.queue_xmldata;
             if (e)
             {
                 storage.getPatch().isDirty = true;
 
                 for (int k = 0; k < n_osc_params; k++)
                 {
+                    std::string oname = osc_st.p[k].oscName;
+                    std::string sx = osc_st.p[k].get_name();
+
                     double d;
                     int j;
                     std::string lbl;
 
                     lbl = fmt::format("p{:d}", k);
 
-                    if (storage.getPatch().scene[s].osc[i].p[k].valtype == vt_float)
+                    if (osc_st.p[k].valtype == vt_float)
                     {
                         if (e->QueryDoubleAttribute(lbl.c_str(), &d) == TIXML_SUCCESS)
                         {
-                            storage.getPatch().scene[s].osc[i].p[k].val.f = (float)d;
+                            osc_st.p[k].val.f = (float)d;
+                            for (const auto &it : audioThreadParamListeners)
+                                (it.second)(oname, d, sx);
                         }
                     }
                     else
                     {
                         if (e->QueryIntAttribute(lbl.c_str(), &j) == TIXML_SUCCESS)
                         {
-                            storage.getPatch().scene[s].osc[i].p[k].val.i = j;
+                            osc_st.p[k].val.i = j;
+                            for (const auto &it : audioThreadParamListeners)
+                                (it.second)(oname, j, sx);
                         }
                     }
 
@@ -3247,31 +3267,40 @@ bool SurgeSynthesizer::loadOscalgos()
 
                     if (e->QueryIntAttribute(lbl.c_str(), &j) == TIXML_SUCCESS)
                     {
-                        storage.getPatch().scene[s].osc[i].p[k].deform_type = j;
+                        osc_st.p[k].deform_type = j;
+                        for (const auto &it : audioThreadParamListeners)
+                            (it.second)(oname, j, sx);
                     }
 
                     lbl = fmt::format("p{:d}_extend_range", k);
 
                     if (e->QueryIntAttribute(lbl.c_str(), &j) == TIXML_SUCCESS)
                     {
-                        storage.getPatch().scene[s].osc[i].p[k].set_extend_range(j);
+                        osc_st.p[k].set_extend_range(j);
+                        for (const auto &it : audioThreadParamListeners)
+                            (it.second)(oname, j, sx);
                     }
                 }
 
                 int rt;
                 if (e->QueryIntAttribute("retrigger", &rt) == TIXML_SUCCESS)
                 {
-                    storage.getPatch().scene[s].osc[i].retrigger.val.b = rt;
+                    osc_st.retrigger.val.b = rt;
+                    std::stringstream sb;
+                    sb << "/param/" << (char)('a' + s) << "/osc/" << i + 1 << "/retrigger";
+                    std::string sx = rt > 0 ? "On" : "Off";
+                    for (const auto &it : audioThreadParamListeners)
+                        (it.second)(sb.str(), rt, sx);
                 }
 
                 /*
                  * Some oscillator types can change display when you change values
                  */
-                if (storage.getPatch().scene[s].osc[i].type.val.i == ot_modern)
+                if (osc_st.type.val.i == ot_modern)
                 {
                     refresh_editor = true;
                 }
-                storage.getPatch().scene[s].osc[i].queue_xmldata = 0;
+                osc_st.queue_xmldata = 0;
             }
         }
     }
@@ -4372,9 +4401,11 @@ void SurgeSynthesizer::processControl()
 
     // TODO: FIX SCENE ASSUMPTION
     if (playA)
-        storage.getPatch().copy_scenedata(storage.getPatch().scenedata[0], 0); // -""-
+        storage.getPatch().copy_scenedata(storage.getPatch().scenedata[0],
+                                          storage.getPatch().scenedataOrig[0], 0); // -""-
     if (playB)
-        storage.getPatch().copy_scenedata(storage.getPatch().scenedata[1], 1);
+        storage.getPatch().copy_scenedata(storage.getPatch().scenedata[1],
+                                          storage.getPatch().scenedataOrig[1], 1);
 
     // TODO: FIX SCENE ASSUMPTION.
     // Prior to 1.1 we could play before or after copying modulation data but as we
@@ -4792,6 +4823,7 @@ void SurgeSynthesizer::process()
 
     storage.modRoutingMutex.unlock();
     polydisplay = vcount;
+    storage.voiceCount = vcount;
 
     // TODO: FIX SCENE ASSUMPTION
     if (play_scene[0])

@@ -262,6 +262,7 @@ bool Parameter::can_temposync() const
     case ct_envtime_linkable_delay:
     case ct_envtime_lfodecay:
     case ct_reverbpredelaytime:
+    case ct_floaty_delay_time:
         return true;
     }
     return false;
@@ -299,6 +300,7 @@ bool Parameter::can_extend_range() const
     case ct_percent_oscdrift:
     case ct_twist_aux_mix:
     case ct_countedset_percent_extendable:
+    case ct_countedset_percent_extendable_wtdeform:
     case ct_dly_fb_clippingmodes:
     case ct_bonsai_bass_boost:
     case ct_detuning:
@@ -378,6 +380,7 @@ bool Parameter::has_deformoptions() const
     case ct_envtime_deformable:
     case ct_filter_feedback:
     case ct_osc_feedback_negative:
+    case ct_countedset_percent_extendable_wtdeform:
         return true;
     default:
         break;
@@ -426,6 +429,7 @@ bool Parameter::is_bipolar() const
     case ct_pitch4oct:
     case ct_modern_trimix:
     case ct_oscspread_bipolar:
+    case ct_floaty_delay_playrate:
     case ct_bonsai_bass_boost:
         res = true;
         break;
@@ -527,6 +531,7 @@ void Parameter::set_user_data(ParamUserData *ud)
     {
     case ct_countedset_percent:
     case ct_countedset_percent_extendable:
+    case ct_countedset_percent_extendable_wtdeform:
         if (dynamic_cast<CountedSetUserData *>(ud))
         {
             user_data = ud;
@@ -789,6 +794,18 @@ void Parameter::set_type(int ctrltype)
         val_min.f = -8;
         val_max.f = 5;
         val_default.f = 0;
+        break;
+    case ct_floaty_warp_time:
+        valtype = vt_float;
+        val_min.f = -3;
+        val_max.f = 4;
+        val_default.f = 0;
+        break;
+    case ct_floaty_delay_time:
+        valtype = vt_float;
+        val_min.f = -5.64386;     // 20ms
+        val_max.f = 3;            // 8s
+        val_default.f = -1.73697; // 300ms
         break;
     case ct_delaymodtime:
     case ct_chorusmodtime:
@@ -1123,6 +1140,7 @@ void Parameter::set_type(int ctrltype)
         break;
     case ct_countedset_percent:
     case ct_countedset_percent_extendable:
+    case ct_countedset_percent_extendable_wtdeform:
         val_min.f = 0;
         val_max.f = 1;
         valtype = vt_float;
@@ -1358,6 +1376,13 @@ void Parameter::set_type(int ctrltype)
         val_max.i = 1;
         break;
 
+    case ct_floaty_delay_playrate:
+        valtype = vt_float;
+        val_min.f = -5.f;
+        val_default.f = 1.f;
+        val_max.f = 5.f;
+        break;
+
     case ct_none:
     default:
         snprintf(dispname, NAMECHARS, "-");
@@ -1398,10 +1423,14 @@ void Parameter::set_type(int ctrltype)
     case ct_rotarydrive:
     case ct_countedset_percent:
     case ct_countedset_percent_extendable:
+    case ct_countedset_percent_extendable_wtdeform:
     case ct_lfoamplitude:
     case ct_lfophaseshuffle:
     case ct_reson_res_extendable:
     case ct_modern_trimix:
+    case ct_floaty_warp_time:
+    case ct_floaty_delay_time:
+    case ct_floaty_delay_playrate:
     case ct_alias_mask:
     case ct_tape_drive:
         displayType = LinearWithScale;
@@ -1933,6 +1962,7 @@ void Parameter::bound_value(bool force_integer)
         }
         case ct_countedset_percent:
         case ct_countedset_percent_extendable:
+        case ct_countedset_percent_extendable_wtdeform:
         {
             CountedSetUserData *cs = reinterpret_cast<CountedSetUserData *>(user_data);
             if (cs)
@@ -3343,6 +3373,7 @@ void Parameter::get_display_alt(char *txt, bool external, float ef) const
     }
     case ct_countedset_percent:
     case ct_countedset_percent_extendable:
+    case ct_countedset_percent_extendable_wtdeform:
         if (user_data != nullptr)
         {
             // We check when set so the reinterpret cast is safe and fast
@@ -4430,6 +4461,7 @@ bool Parameter::can_setvalue_from_string() const
     case ct_oscspread_bipolar:
     case ct_countedset_percent:
     case ct_countedset_percent_extendable:
+    case ct_countedset_percent_extendable_wtdeform:
     case ct_flangerpitch:
     case ct_flangervoices:
     case ct_flangerspacing:
@@ -4462,6 +4494,9 @@ bool Parameter::can_setvalue_from_string() const
     case ct_tape_speed:
     case ct_spring_decay:
     case ct_bonsai_bass_boost:
+    case ct_floaty_warp_time:
+    case ct_floaty_delay_time:
+    case ct_floaty_delay_playrate:
     {
         return true;
     }

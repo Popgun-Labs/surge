@@ -27,6 +27,7 @@
 #include <thread>
 #include <functional>
 #include "fmt/core.h"
+#include "lua/LuaSources.h"
 
 namespace Surge
 {
@@ -34,6 +35,7 @@ namespace Formula
 {
 
 void setupStorage(SurgeStorage *s) { s->formulaGlobalData = std::make_unique<GlobalData>(); }
+
 bool prepareForEvaluation(SurgeStorage *storage, FormulaModulatorStorage *fs, EvaluatorState &s,
                           bool is_display)
 {
@@ -80,7 +82,13 @@ bool prepareForEvaluation(SurgeStorage *storage, FormulaModulatorStorage *fs, Ev
 
     if (firstTimeThrough)
     {
-        Surge::LuaSupport::loadSurgePrelude(s.L);
+        // Setup shared table
+        lua_newtable(s.L);
+        lua_setglobal(s.L, sharedTableName);
+
+        // Load the Formula prelude
+        Surge::LuaSupport::loadSurgePrelude(s.L, Surge::LuaSources::formula_prelude);
+
         auto reserved0 = std::string(R"FN(
 function surge_reserved_formula_error_stub(m)
     return 0;
@@ -211,24 +219,29 @@ end
                 lua_pushnumber(s.L, f);
                 lua_setfield(s.L, -2, q);
             };
+
             auto addb = [&s](const char *q, bool f) {
                 lua_pushboolean(s.L, f);
                 lua_setfield(s.L, -2, q);
             };
 
             addn("delay", s.del);
-            addn("decay", s.dec);
             addn("attack", s.a);
             addn("hold", s.h);
+            addn("decay", s.dec);
             addn("sustain", s.s);
             addn("release", s.r);
+
             addn("rate", s.rate);
-            addn("amplitude", s.amp);
             addn("startphase", s.phase);
             addn("deform", s.deform);
+            addn("amplitude", s.amp);
+
             addn("tempo", s.tempo);
             addn("songpos", s.songpos);
             addb("released", s.released);
+
+            addb("is_rendering_to_ui", s.is_display);
             addb("clamp_output", true);
 
             auto cres = lua_pcall(s.L, 1, 1, 0);
@@ -363,11 +376,15 @@ end
     s.h = 0;
     s.r = 0;
     s.s = 0;
+
     s.rate = 0;
     s.phase = 0;
     s.amp = 0;
     s.deform = 0;
     s.tempo = 120;
+
+    if (is_display)
+        s.is_display = true;
 
     if (s.raisedError)
         std::cout << "ERROR: " << *(s.error) << std::endl;
@@ -420,6 +437,7 @@ bool initEvaluatorState(EvaluatorState &s)
     s.L = nullptr;
     return true;
 }
+
 void valueAt(int phaseIntPart, float phaseFracPart, SurgeStorage *storage,
              FormulaModulatorStorage *fs, EvaluatorState *s, float output[max_formula_outputs],
              bool justSetup)
@@ -450,6 +468,7 @@ void valueAt(int phaseIntPart, float phaseFracPart, SurgeStorage *storage,
         std::string fn;
         bool replace = true;
     } onerr(s->L, s->funcName);
+
     /*
      * So: make the stack my evaluation func then my table; then push my table
      * values; then call my function; then update my global
@@ -463,22 +482,13 @@ void valueAt(int phaseIntPart, float phaseFracPart, SurgeStorage *storage,
     }
     lua_getglobal(s->L, s->stateName);
 
-    /*
-    lua_pushstring(s->L, "av");
-    lua_gettable(s->L, -2);
-    lua_pop(s->L, 1);
-    */
-
-    // Stack is now func > table  so we can update the table
-    lua_pushinteger(s->L, phaseIntPart);
-    lua_setfield(s->L, -2, "intphase");
-
-    // Alias cycle for intphase
-    lua_pushinteger(s->L, phaseIntPart);
-    lua_setfield(s->L, -2, "cycle");
-
     auto addn = [s](const char *q, float f) {
         lua_pushnumber(s->L, f);
+        lua_setfield(s->L, -2, q);
+    };
+
+    auto addi = [s](const char *q, int i) {
+        lua_pushnumber(s->L, i);
         lua_setfield(s->L, -2, q);
     };
 
@@ -492,70 +502,31 @@ void valueAt(int phaseIntPart, float phaseFracPart, SurgeStorage *storage,
         lua_setfield(s->L, -2, q);
     };
 
+    // Stack is now func > table so we can update the table
+    addi("intphase", phaseIntPart);
+    addi("cycle", phaseIntPart); // Alias cycle for intphase
+
+    // Fake a voice count of one for display calls
+    int voiceCount = storage->voiceCount;
+    if (voiceCount == 0)
+        voiceCount = 1;
+    addi("voice_count", voiceCount);
+
+    addn("delay", s->del);
+    addn("decay", s->dec);
+    addn("attack", s->a);
+    addn("hold", s->h);
+    addn("sustain", s->s);
+    addn("release", s->r);
+
+    addn("rate", s->rate);
+    addn("startphase", s->phase);
+    addn("amplitude", s->amp);
+    addn("deform", s->deform);
+
     addn("phase", phaseFracPart);
-
-    if (true /* s->subLfoEnvelope */)
-    {
-        addn("delay", s->del);
-        addn("decay", s->dec);
-        addn("attack", s->a);
-        addn("hold", s->h);
-        addn("sustain", s->s);
-        addn("release", s->r);
-    }
-    if (true /* s->subLfoParams */)
-    {
-        addn("rate", s->rate);
-        addn("amplitude", s->amp);
-        addn("startphase", s->phase);
-        addn("deform", s->deform);
-    }
-
-    if (true /* s->subTiming */)
-    {
-        addn("tempo", s->tempo);
-        addn("songpos", s->songpos);
-        addb("released", s->released);
-    }
-
-    if (/* s->subVoice  && */ s->isVoice)
-    {
-        addb("is_voice", s->isVoice);
-        addn("key", s->key);
-        addn("velocity", s->velocity);
-        addn("rel_velocity", s->releasevelocity);
-        addn("channel", s->channel);
-        addb("released", s->released);
-
-        addn("poly_at", s->polyat);
-        addn("mpe_bend", s->mpebend);
-        addn("mpe_bendrange", s->mpebendrange);
-        addn("mpe_timbre", s->mpetimbre);
-        addn("mpe_pressure", s->mpepressure);
-    }
-    else
-    {
-        addb("is_voice", false);
-    }
-
-    addnil("retrigger_AEG");
-    addnil("retrigger_FEG");
-
-    if (s->subAnyMacro)
-    {
-        // load the macros
-        lua_createtable(s->L, n_customcontrollers, 0); // macros
-        for (int i = 0; i < n_customcontrollers; ++i)
-        {
-            if (s->subMacros[i])
-            {
-                lua_pushinteger(s->L, i + 1);
-                lua_pushnumber(s->L, s->macrovalues[i]);
-                lua_settable(s->L, -3);
-            }
-        }
-        lua_setfield(s->L, -2, "macros");
-    }
+    addn("tempo", s->tempo);
+    addn("songpos", s->songpos);
 
     addn("pb", s->pitchbend);
     addn("pb_range_up", s->pbrange_up);
@@ -568,6 +539,57 @@ void valueAt(int phaseIntPart, float phaseFracPart, SurgeStorage *storage,
     addn("lowest_key", s->lowest_key);
     addn("highest_key", s->highest_key);
     addn("latest_key", s->latest_key);
+
+    addi("poly_limit", s->polylimit);
+    addi("scene_mode", s->scenemode);
+    addi("play_mode", s->polymode);
+    addi("split_point", s->splitpoint);
+
+    addb("released", s->released);
+    addb("is_rendering_to_ui", s->is_display);
+
+    addnil("retrigger_AEG");
+    addnil("retrigger_FEG");
+
+    if (s->isVoice)
+    {
+        addi("key", s->key);
+        addi("velocity", s->velocity);
+        addi("rel_velocity", s->releasevelocity);
+        addi("channel", s->channel);
+
+        addn("poly_at", s->polyat);
+        addn("mpe_bend", s->mpebend);
+        addn("mpe_bendrange", s->mpebendrange);
+        addn("mpe_timbre", s->mpetimbre);
+        addn("mpe_pressure", s->mpepressure);
+
+        addb("is_voice", s->isVoice);
+        addb("released", s->released);
+
+        // LuaJIT has no exposed API for 64-bit int so push this as number
+        addn("voice_id", s->voiceOrderAtCreate);
+    }
+    else
+    {
+        addb("is_voice", false);
+    }
+
+    if (s->subAnyMacro)
+    {
+        // load the macros
+        lua_createtable(s->L, n_customcontrollers, 0);
+        for (int i = 0; i < n_customcontrollers; ++i)
+        {
+            if (s->subMacros[i])
+            {
+                lua_pushinteger(s->L, i + 1);
+                lua_pushnumber(s->L, s->macrovalues[i]);
+                lua_settable(s->L, -3);
+            }
+        }
+        lua_setfield(s->L, -2, "macros");
+    }
 
     if (justSetup)
     {
@@ -709,7 +731,6 @@ void valueAt(int phaseIntPart, float phaseFracPart, SurgeStorage *storage,
         lua_pop(s->L, 1);
         return;
     }
-#else
 #endif
 }
 
@@ -718,13 +739,7 @@ std::vector<DebugRow> createDebugDataOfModState(const EvaluatorState &es)
 #if HAS_LUA
     std::vector<DebugRow> rows;
     Surge::LuaSupport::SGLD guard("debugViewGuard", es.L);
-    lua_getglobal(es.L, es.stateName);
-    if (!lua_istable(es.L, -1))
-    {
-        lua_pop(es.L, -1);
-        rows.emplace_back(0, "Error", "Not a Table");
-        return rows;
-    }
+
     std::function<void(const int, bool)> rec;
     rec = [&rows, &es, &rec](const int depth, bool internal) {
         Surge::LuaSupport::SGLD guardR("rec[" + std::to_string(depth) + "]", es.L);
@@ -770,10 +785,6 @@ std::vector<DebugRow> createDebugDataOfModState(const EvaluatorState &es)
                 {
                     rows.emplace_back(depth, lab, lua_tostring(es.L, -1));
                 }
-                else if (lua_isnil(es.L, -1))
-                {
-                    rows.emplace_back(depth, lab, "(nil)");
-                }
                 else if (lua_isboolean(es.L, -1))
                 {
                     rows.emplace_back(depth, lab, (lua_toboolean(es.L, -1) ? "true" : "false"));
@@ -785,12 +796,23 @@ std::vector<DebugRow> createDebugDataOfModState(const EvaluatorState &es)
                     rows.back().isInternal = internal;
                     rec(depth + 1, internal);
                 }
+                else if (lua_isfunction(es.L, -1))
+                {
+                    rows.emplace_back(depth, lab, "(function)");
+                    rows.back().isInternal = internal;
+                }
+                else if (lua_isnil(es.L, -1))
+                {
+                    rows.emplace_back(depth, lab, "(nil)");
+                    rows.back().isInternal = internal;
+                }
                 else
                 {
                     rows.emplace_back(depth, lab, "(unknown)");
+                    rows.back().isInternal = internal;
                 }
-                rows.back().isInternal = internal;
             };
+
             for (auto k : ikeys)
             {
                 std::ostringstream oss;
@@ -810,13 +832,26 @@ std::vector<DebugRow> createDebugDataOfModState(const EvaluatorState &es)
         }
     };
 
-    rec(0, false);
-    lua_pop(es.L, -1);
+    std::vector<std::string> tablesList = {es.stateName, sharedTableName};
+    for (const auto &t : tablesList)
+    {
+        lua_getglobal(es.L, t.c_str());
+        if (!lua_istable(es.L, -1))
+        {
+            lua_pop(es.L, -1);
+            rows.emplace_back(0, "Error", "Not a Table");
+            continue;
+        }
+        rec(0, false);
+        lua_pop(es.L, -1);
+    }
+
     return rows;
 #else
     return {};
 #endif
 }
+
 std::string createDebugViewOfModState(const EvaluatorState &es)
 {
     auto r = createDebugDataOfModState(es);
@@ -884,13 +919,24 @@ void setupEvaluatorStateFrom(EvaluatorState &s, const SurgePatch &patch, int sce
     s.lowest_key = scene.modsources[ms_lowest_key]->get_output(0);
     s.highest_key = scene.modsources[ms_highest_key]->get_output(0);
     s.latest_key = scene.modsources[ms_latest_key]->get_output(0);
+
+    s.polylimit = patch.polylimit.val.i;
+    s.scenemode = patch.scenemode.val.i;
+    s.polymode = patch.scene[sceneIndex].polymode.val.i;
+
+    s.splitpoint = patch.splitpoint.val.i;
+    if (s.scenemode == sm_chsplit)
+        s.splitpoint = (int)(s.splitpoint / 8 + 1);
 }
+
 void setupEvaluatorStateFrom(EvaluatorState &s, const SurgeVoice *v)
 {
     s.key = v->state.key;
     s.channel = v->state.channel;
     s.velocity = v->state.velocity;
     s.releasevelocity = v->state.releasevelocity;
+
+    s.voiceOrderAtCreate = v->state.voiceOrderAtCreate;
 
     s.polyat =
         v->storage

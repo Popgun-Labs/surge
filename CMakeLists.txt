@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.15)
 cmake_policy(SET CMP0091 NEW)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-set(CMAKE_OSX_DEPLOYMENT_TARGET 10.9 CACHE STRING "Minimum macOS version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET 10.13 CACHE STRING "Minimum macOS version")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -14,7 +14,7 @@ if(NOT BUILD_TESTING)
   option(BUILD_TESTING "" OFF)
 endif()
 
-project(Surge VERSION 1.3.2 LANGUAGES C CXX ASM)
+project(Surge VERSION 1.4.0 LANGUAGES C CXX ASM)
 
 # Banner {{{
 message(STATUS "It's Surge XT, folks! Version is ${PROJECT_VERSION}")
@@ -140,6 +140,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
       add_compile_options(
         -faligned-allocation
         -fasm-blocks
+      )
+
+      # LuaJit + XCode 16 goes blammo
+      add_link_options(
+        -Wl,-no_deduplicate
       )
     endif()
   elseif(CMAKE_CXX_COMPILER_ID MATCHES "^GNU$")
