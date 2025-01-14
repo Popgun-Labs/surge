@@ -46,9 +46,9 @@ def test_tempo_change():
     Test tempo changes
     """
     s = surgepy.createSurge(44100)
-    assert (s.getTempo == 120.0)
+    assert (s.getTempo() == 120.0)
     s.setTempo(148.0)
-    assert (s.getTempo == 148.0)
+    assert (s.getTempo() == 148.0)
 
 
 def test_default_mpeEnabled():
