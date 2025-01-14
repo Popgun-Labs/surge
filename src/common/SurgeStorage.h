@@ -1425,6 +1425,9 @@ class alignas(16) SurgeStorage
     void loadMidiMappingByName(std::string name);
     void storeMidiMappingToName(std::string name);
 
+    void loadMidiMappingFromDoc(const TiXmlDocument &doc);
+    void loadMidiMappingFromFile(const fs::path &p);
+
     std::mutex waveTableDataMutex;
     std::recursive_mutex modRoutingMutex;
     Wavetable WindowWT;

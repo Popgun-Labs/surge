@@ -6,9 +6,16 @@ pybind11_add_module(${PROJECT_NAME})
 
 target_sources(${PROJECT_NAME} PRIVATE surgepy.cpp)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
-  surge::surge-common
-  )
+if(APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+      "-framework AppKit"
+      surge::surge-common
+    )
+else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+      surge::surge-common
+    )
+endif()
 
 if(UNIX AND NOT APPLE)
   find_package(Threads REQUIRED)

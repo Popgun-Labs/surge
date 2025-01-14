@@ -639,6 +639,9 @@ class SurgeSynthesizerWithPythonExtensions : public SurgeSynthesizer
 
     void savePatchPy(const std::string &s) { savePatchToPath(string_to_path(s)); }
 
+    float getTempoPy() { return time_data.tempo; }
+    void setTempoPy(float tempo) { time_data.tempo = tempo; }
+
     std::string factoryDataPath() const { return storage.datapath.u8string(); }
 
     std::string userDataPath() const { return storage.userDataPath.u8string(); }
@@ -973,6 +976,18 @@ class SurgeSynthesizerWithPythonExtensions : public SurgeSynthesizer
         return res;
     }
 
+    void loadMidiMappingFile(const std::string &s)
+    {
+        try
+        {
+            storage.loadMidiMappingFromFile(s);
+        }
+        catch (std::exception &e)
+        {
+            throw std::runtime_error(e.what()); // convert so python sees it
+        }
+    }
+
     void loadSCLFile(const std::string &s)
     {
         try
@@ -1111,6 +1126,11 @@ PYBIND11_MODULE(surgepy, m)
         .def("savePatch", &SurgeSynthesizerWithPythonExtensions::savePatchPy,
              "Save the current state of Surge XT to an .fxp file.", py::arg("path"))
 
+        .def("getTempo", &SurgeSynthesizerWithPythonExtensions::getTempoPy,
+             "Get the current tempo.")
+        .def("setTempo", &SurgeSynthesizerWithPythonExtensions::setTempoPy,
+             "Set the tempo by replacing current value.", py::arg("tempo"))
+
         .def("getModSource", &SurgeSynthesizerWithPythonExtensions::getModSource,
              "Given a constant from surge.constants.ms_*, provide a modulator object",
              py::arg("modId"))
@@ -1161,6 +1181,8 @@ PYBIND11_MODULE(surgepy, m)
              "Get a Python dictionary with the Surge XT parameters laid out in the logical patch "
              "format")
 
+        .def("loadMidiMappingFile", &SurgeSynthesizerWithPythonExtensions::loadMidiMappingFile,
+             "Load a MIDI Mapping file")
         .def("loadSCLFile", &SurgeSynthesizerWithPythonExtensions::loadSCLFile,
              "Load an SCL tuning file and apply tuning to this instance")
         .def("retuneToStandardTuning",
